@@ -1,0 +1,306 @@
+name: Issue Management Automation
+
+on:
+  issues:
+    types: [opened, labeled]
+
+permissions:
+  issues: write
+  contents: write
+
+jobs:
+  issue-triage:
+    runs-on: ubuntu-latest
+    if: github.event.action == 'opened'
+    outputs:
+      category: ${{ steps.categorize.outputs.category }}
+      priority: ${{ steps.prioritize.outputs.priority }}
+      issue-number: ${{ github.event.issue.number }}
+    steps:
+      - name: Ensure Labels Exist
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const labels = [
+              { name: 'bug', color: 'd73a4a', description: 'Something isn\'t working' },
+              { name: 'enhancement', color: 'a2eeef', description: 'New feature or request' },
+              { name: 'epic', color: '5319e7', description: 'Large feature requiring multiple sub-tasks' },
+              { name: 'maintenance', color: 'fbca04', description: 'Maintenance and housekeeping tasks' },
+              { name: 'priority-critical', color: 'b60205', description: 'Critical priority issue' },
+              { name: 'priority-high', color: 'd93f0b', description: 'High priority issue' },
+              { name: 'priority-medium', color: 'e4e669', description: 'Medium priority issue' },
+              { name: 'priority-low', color: '0e8a16', description: 'Low priority issue' },
+              { name: 'needs-triage', color: 'ededed', description: 'Needs to be reviewed by maintainers' },
+              { name: 'needs-review', color: 'fbca04', description: 'Awaiting review from maintainers' },
+              { name: 'first-time-contributor', color: '7057ff', description: 'Issue created by first-time contributor' }
+            ];
+            for (const label of labels) {
+              try {
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: label.name,
+                  color: label.color,
+                  description: label.description
+                });
+              } catch (e) {
+                if (e.status !== 422) {
+                  core.warning(`Failed to create label ${label.name}: ${e.message}`);
+                }
+              }
+            }
+
+      - name: Categorize Issue
+        id: categorize
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = context.payload.issue.title.toLowerCase();
+            let category = '';
+            if (title.includes('bug')) {
+              category = 'bug';
+            } else if (title.includes('epic')) {
+              category = 'epic';
+            } else if (title.includes('maintenance')) {
+              category = 'maintenance';
+            }
+            core.setOutput('category', category);
+
+      - name: Prioritize Issue
+        id: prioritize
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = context.payload.issue.title.toLowerCase();
+            const body = (context.payload.issue.body || '').toLowerCase();
+            const text = title + ' ' + body;
+            let priority = '';
+            const criticalKeywords = ['critical', 'urgent', 'production', 'outage'];
+            const highKeywords = ['important', 'high', 'blocking'];
+            const mediumKeywords = ['medium', 'normal'];
+            const lowKeywords = ['low', 'nice-to-have', 'minor'];
+            if (criticalKeywords.some(k => text.includes(k))) {
+              priority = 'priority-critical';
+            } else if (highKeywords.some(k => text.includes(k))) {
+              priority = 'priority-high';
+            } else if (lowKeywords.some(k => text.includes(k))) {
+              priority = 'priority-low';
+            } else {
+              priority = 'priority-medium';
+            }
+            core.setOutput('priority', priority);
+
+      - name: Apply Labels
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const category = '${{ steps.categorize.outputs.category }}';
+            const priority = '${{ steps.prioritize.outputs.priority }}';
+            const labelsToAdd = ['needs-triage'];
+            if (category) {
+              labelsToAdd.push(category);
+            }
+            if (priority) {
+              labelsToAdd.push(priority);
+            }
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.issue.number,
+              labels: labelsToAdd
+            });
+
+  task-breakdown:
+    runs-on: ubuntu-latest
+    needs: issue-triage
+    if: needs.issue-triage.outputs.category == 'epic'
+    steps:
+      - name: Create Sub-Issues for Epic
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const parentNumber = context.payload.issue.number;
+            const parentTitle = context.payload.issue.title;
+            const tasks = [
+              'Requirements Analysis',
+              'Design and Architecture',
+              'Implementation',
+              'Testing and Documentation'
+            ];
+            const subIssueNumbers = [];
+            for (let i = 0; i < tasks.length; i++) {
+              const subIssue = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `[SUBTASK] ${parentTitle} - Task ${i + 1}: ${tasks[i]}`,
+                body: `Related to #${parentNumber}
+
+This is sub-task ${i + 1} of the epic: ${parentTitle}
+
+## Objectives
+- Complete ${tasks[i]} phase for this epic`,
+                labels: ['enhancement', 'needs-review']
+              });
+              subIssueNumbers.push(subIssue.data.number);
+            }
+            const checklist = subIssueNumbers.map((num, idx) => {
+              return `- [ ] #${num} - Task ${idx + 1}: ${tasks[idx]}`;
+            }).join('
+');
+            const currentBody = context.payload.issue.body || '';
+            const updatedBody = `${currentBody}
+
+## Epic Tasks
+${checklist}`;
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: parentNumber,
+              body: updatedBody
+            });
+
+  auto-response:
+    runs-on: ubuntu-latest
+    needs: issue-triage
+    if: github.event.action == 'opened'
+    steps:
+      - name: Check First-Time Contributor
+        id: first-time
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const author = context.payload.issue.user.login;
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              creator: author,
+              state: 'all',
+              per_page: 2
+            });
+            const isFirstIssue = issues.data.length <= 1;
+            core.setOutput('is_first', isFirstIssue.toString());
+            if (isFirstIssue) {
+              try {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.payload.issue.number,
+                  labels: ['first-time-contributor']
+                });
+              } catch (e) {
+                core.warning(`Failed to add first-time-contributor label: ${e.message}`);
+              }
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.issue.number,
+                body: '👋 Welcome! Thank you for creating your first issue in this repository. Our team will review it shortly.'
+              });
+            }
+
+      - name: Post Category Response
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const category = '${{ needs.issue-triage.outputs.category }}';
+            const priority = '${{ needs.issue-triage.outputs.priority }}';
+            let responseBody = '';
+            if (category === 'bug') {
+              responseBody = `## Bug Report Guidelines
+
+Thank you for reporting this bug! To help us resolve it quickly, please ensure you have provided:
+
+- **Steps to reproduce** the issue
+- **Expected behavior** vs **actual behavior**
+- **Environment details** (OS, Node.js version, browser)
+- **Screenshots or logs** if applicable
+
+Our team will investigate this issue and provide updates here.`;
+            } else if (category === 'epic') {
+              responseBody = `## Feature Request Process
+
+Thank you for submitting this epic! Here's our process:
+
+1. **Review** - The team will review the scope and requirements
+2. **Planning** - Sub-tasks have been automatically created
+3. **Design** - Architecture and design discussions will follow
+4. **Implementation** - Development will be tracked through sub-issues
+
+Please review the generated sub-tasks below and add any additional context.`;
+            } else if (category === 'maintenance') {
+              responseBody = `## Maintenance Guidelines
+
+Thank you for identifying this maintenance task! Our process:
+
+- **Assessment** - We'll evaluate the scope of work needed
+- **Scheduling** - Maintenance tasks are scheduled during low-traffic periods
+- **Execution** - Changes will be made with proper testing
+- **Verification** - Post-maintenance checks will be performed
+
+Please provide any additional context about urgency or dependencies.`;
+            } else {
+              responseBody = `## Issue Received
+
+Thank you for creating this issue. Our team will review it and provide updates shortly.`;
+            }
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.issue.number,
+              body: responseBody
+            });
+
+      - name: Set Milestone for High Priority
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const priority = '${{ needs.issue-triage.outputs.priority }}';
+            if (priority === 'priority-high' || priority === 'priority-critical') {
+              let milestone;
+              try {
+                const milestones = await github.rest.issues.listMilestones({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  state: 'open'
+                });
+                milestone = milestones.data.find(m => m.title === 'v1.0.0');
+                if (!milestone) {
+                  const created = await github.rest.issues.createMilestone({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    title: 'v1.0.0',
+                    description: 'Version 1.0.0 release milestone'
+                  });
+                  milestone = created.data;
+                }
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.payload.issue.number,
+                  milestone: milestone.number
+                });
+              } catch (e) {
+                core.warning(`Failed to set milestone: ${e.message}`);
+              }
+            }
+
+      - name: Update Status Label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.issue.number,
+                name: 'needs-triage'
+              });
+            } catch (e) {
+              core.warning(`Could not remove needs-triage label: ${e.message}`);
+            }
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.issue.number,
+              labels: ['needs-review']
+            });
