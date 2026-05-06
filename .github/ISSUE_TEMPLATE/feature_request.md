@@ -1,39 +1,32 @@
 ---
 name: Feature Request
-about: Suggest a new feature or enhancement
+about: Suggest an idea or epic for this project
 title: 'Epic: '
 labels: enhancement
 assignees: ''
 ---
 
-## Feature Summary
-A clear and concise description of the feature you'd like to see.
+## Feature Description
+A clear and concise description of the feature you'd like.
 
 ## Problem Statement
-Describe the problem this feature would solve. Ex. I'm always frustrated when [...]
+Describe the problem this feature would solve.
 
 ## Proposed Solution
-A clear and concise description of what you want to happen.
+A clear and concise description of the solution you'd like.
 
-## Alternative Solutions
-Describe any alternative solutions or features you've considered.
+## Alternatives Considered
+A description of any alternative solutions or features you've considered.
+
+## Scope and Impact
+- **Affected areas**: [e.g. UI, API, Database]
+- **Estimated effort**: [e.g. Small, Medium, Large]
+- **Priority**: [e.g. High, Medium, Low]
 
 ## Acceptance Criteria
 - [ ] Criterion 1
 - [ ] Criterion 2
 - [ ] Criterion 3
 
-## Design Considerations
-Any design mockups, wireframes, or technical architecture notes.
-
-## Dependencies
-List any dependencies or prerequisites for this feature.
-
 ## Additional Context
-Add any other context, screenshots, or references about the feature request here.
-
-## Priority Assessment
-- [ ] This is critical/urgent
-- [ ] This is high priority/important
-- [ ] This is medium/normal priority
-- [ ] This is low priority/nice-to-have
+Add any other context, mockups, or screenshots about the feature request here.
