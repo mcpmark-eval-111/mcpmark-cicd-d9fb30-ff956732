@@ -6,42 +6,30 @@ labels: maintenance
 assignees: ''
 ---
 
-## Maintenance Summary
+## Maintenance Description
 A clear description of the maintenance task needed.
 
-## Area of Impact
-- [ ] Code quality / refactoring
-- [ ] Dependency updates
-- [ ] Performance optimization
-- [ ] Security patches
-- [ ] Documentation updates
-- [ ] Infrastructure / DevOps
-- [ ] Database maintenance
-- [ ] Other
+## Reason / Motivation
+Why is this maintenance task necessary?
 
-## Current State
-Describe the current state that needs maintenance attention.
+## Scope
+- **Affected components**: [e.g. dependencies, configs, CI/CD]
+- **Estimated time**: [e.g. 1-2 hours]
+- **Risk level**: [e.g. Low, Medium, High]
 
-## Desired Outcome
-What should the state be after maintenance is complete?
+## Proposed Changes
+Describe the specific changes that need to be made.
 
-## Steps Required
-1. Step 1
-2. Step 2
-3. Step 3
+## Impact Assessment
+- **Downtime required**: [Yes/No]
+- **Breaking changes**: [Yes/No]
+- **Testing needed**: [e.g. Unit tests, Integration tests]
 
-## Risk Assessment
-- **Risk Level:** [Low / Medium / High]
-- **Potential Impact:** Describe what could go wrong
-- **Rollback Plan:** How to revert if needed
-
-## Scheduling Preferences
-- [ ] Can be done during normal hours
-- [ ] Requires maintenance window
-- [ ] Urgent - needs immediate attention
-
-## Dependencies
-List any dependencies or systems affected by this maintenance.
+## Checklist
+- [ ] Changes documented
+- [ ] Impact assessed
+- [ ] Rollback plan prepared
+- [ ] Team notified
 
 ## Additional Context
 Add any other context about the maintenance task here.
